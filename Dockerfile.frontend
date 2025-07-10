@@ -1,0 +1,36 @@
+# Dockerfile para Frontend Next.js (Desenvolvimento)
+FROM node:16-alpine
+
+# Definir variáveis de ambiente para desenvolvimento
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Instalar dependências do sistema
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar arquivos de dependências primeiro
+COPY www/package*.json ./
+
+# Instalar dependências Node.js
+RUN npm install
+
+# Copiar código da aplicação (excluindo node_modules)
+COPY www/package.json www/package-lock.json ./
+COPY www/postcss.config.js www/tailwind.config.js ./
+COPY www/tsconfig.json www/next-env.d.ts ./
+COPY www/pages/ ./pages/
+COPY www/components/ ./components/
+COPY www/styles.css ./
+COPY www/auth.tsx ./
+
+# Expor porta 4000 (porta padrão do Next.js)
+EXPOSE 4000
+
+# Comando para rodar em modo de desenvolvimento com hot reload
+CMD ["npm", "run", "dev"] 

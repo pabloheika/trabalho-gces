@@ -1,0 +1,36 @@
+# Dockerfile para Backend Django (Desenvolvimento)
+FROM python:3.8-slim
+
+# Definir variáveis de ambiente para desenvolvimento
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DEBUG=True
+ENV ON_SERVER=False
+ENV IGNORE_DOT_ENV_FILE=False
+
+# Instalar dependências do sistema
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        gcc \
+        postgresql-client \
+        libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Definir diretório de trabalho
+WORKDIR /app
+
+# Copiar arquivos de dependências
+COPY requirements/ requirements/
+COPY requirements.txt .
+
+# Instalar dependências Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código da aplicação
+COPY . .
+
+# Expor porta 4001 (porta padrão do Django)
+EXPOSE 4001
+
+# Comando para rodar em modo de desenvolvimento com hot reload
+CMD ["python", "manage.py", "runserver", "0.0.0.0:4001"] 
