@@ -1,0 +1,80 @@
+services:
+  # Banco de dados PostgreSQL
+  db:
+    image: postgres:13-alpine
+    container_name: gces-postgres-dev
+    environment:
+      POSTGRES_DB: django_auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - gces-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Django
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: gces-backend-dev
+    ports:
+      - "4001:4001"
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+      - ON_SERVER=False
+      - IGNORE_DOT_ENV_FILE=False
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/django_auth_db
+      - CORS_ORIGIN_REGEX_WHITELIST=http://localhost:4000,http://127.0.0.1:4000
+      - JWT_COOKIE_NAME=refresh_token
+      - JWT_COOKIE_SECURE=False
+      - JWT_COOKIE_SAMESITE=Lax
+      - LOGGING_LEVEL=DEBUG
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - gces-network
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:4001"
+
+  # Frontend Next.js
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: gces-frontend-dev
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./www:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - NEXT_PUBLIC_API_HOST=http://localhost:4001
+    depends_on:
+      - backend
+    networks:
+      - gces-network
+    command: sh -c "npm install && npm run dev"
+
+# Volumes
+volumes:
+  postgres_data:
+    driver: local
+
+# Redes
+networks:
+  gces-network:
+    driver: bridge 

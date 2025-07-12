@@ -33,4 +33,4 @@ COPY www/auth.tsx ./
 EXPOSE 4000
 
 # Comando para rodar em modo de desenvolvimento com hot reload
-CMD ["npm", "run", "dev"] 
+CMD npm install && npm run dev 
