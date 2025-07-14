@@ -1,0 +1,128 @@
+stages:
+  - build
+  - test
+  - lint
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+# Cache para otimizar builds
+cache:
+  paths:
+    - .cache/pip/
+    - www/node_modules/
+
+# Job de Build do Backend
+build-backend:
+  stage: build
+  image: python:3.8-slim
+  services:
+    - postgres:13-alpine
+  variables:
+    POSTGRES_DB: test_db
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    DATABASE_URL: postgres://postgres:postgres@postgres:5432/test_db
+  before_script:
+    - apt-get update && apt-get install -y gcc postgresql-client libpq-dev
+    - pip install --cache-dir .cache/pip -r requirements.txt
+  script:
+    - python manage.py check
+    - python manage.py collectstatic --noinput
+  artifacts:
+    paths:
+      - staticfiles/
+    expire_in: 1 week
+  tags:
+    - docker
+
+# Job de Build do Frontend
+build-frontend:
+  stage: build
+  image: node:16-alpine
+  before_script:
+    - cd www
+    - npm ci
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - www/.next/
+    expire_in: 1 week
+  tags:
+    - docker
+
+# Job de Testes do Backend
+test-backend:
+  stage: test
+  image: python:3.8-slim
+  services:
+    - postgres:13-alpine
+  variables:
+    POSTGRES_DB: test_db
+    POSTGRES_USER: postgres
+    POSTGRES_PASSWORD: postgres
+    DATABASE_URL: postgres://postgres:postgres@postgres:5432/test_db
+    DEBUG: True
+    ON_SERVER: False
+    IGNORE_DOT_ENV_FILE: True
+  before_script:
+    - apt-get update && apt-get install -y gcc postgresql-client libpq-dev
+    - pip install --cache-dir .cache/pip -r requirements.txt
+    - python manage.py migrate
+  script:
+    - python manage.py test api.tests.test_auth --verbosity=2
+  coverage: '/TOTAL.*\s+(\d+%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths:
+      - coverage.xml
+    expire_in: 1 week
+  tags:
+    - docker
+
+# Job de Testes do Frontend
+test-frontend:
+  stage: test
+  image: node:16-alpine
+  before_script:
+    - cd www
+    - npm ci
+  script:
+    - npm test
+  artifacts:
+    paths:
+      - www/coverage/
+    expire_in: 1 week
+  tags:
+    - docker
+
+# Job de Lint do Backend
+lint-backend:
+  stage: lint
+  image: python:3.8-slim
+  before_script:
+    - apt-get update && apt-get install -y gcc
+    - pip install --cache-dir .cache/pip flake8 black isort
+  script:
+    - flake8 api/ app/ --max-line-length=88 --extend-ignore=E203,W503
+    - black --check --diff api/ app/
+    - isort --check-only --diff api/ app/
+  tags:
+    - docker
+
+# Job de Lint do Frontend
+lint-frontend:
+  stage: lint
+  image: node:16-alpine
+  before_script:
+    - cd www
+    - npm ci
+  script:
+    - npm run lint
+  tags:
+    - docker 
